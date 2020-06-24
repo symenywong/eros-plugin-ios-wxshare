@@ -77,7 +77,7 @@ WX_EXPORT_METHOD(@selector(authLogin:))
     
     UMSocialPlatformType platformType = UMSocialPlatformType_UnKnown;
     UMSocialMessageObject *messageObject = [UMSocialMessageObject messageObject];
-    
+    WXMediaMessage *message = [WXMediaMessage message];
     /** 分享平台 */
     //微信聊天
     if (model.platform == BMSharePlatformType_WechatSession)
@@ -127,11 +127,16 @@ WX_EXPORT_METHOD(@selector(authLogin:))
     //小程序
     else if (model.shareType == BMShareTypeMiniProgram)
     {
-        UMShareMiniProgramObject *shareObject = [UMShareMiniProgramObject shareObjectWithTitle:shareTitle descr:shareText thumImage:shareImage];
+        NSData *imgData = [NSData dataWithContentsOfURL:[NSURL URLWithString:model.image]];
+        UIImage *newImage = [[UIImage alloc]initWithData:imgData];
+        UIImage *shareImages =[self compressImage:newImage toTargetWidth:500];
+        UMShareMiniProgramObject *shareObject = [UMShareMiniProgramObject shareObjectWithTitle:shareTitle descr:shareText thumImage:shareImages];
         shareObject.webpageUrl = shareUrl;
         shareObject.path = model.path;
         shareObject.userName = model.userName;
         messageObject.shareObject = shareObject;
+        message.thumbData = nil;  //兼容旧版本节点的图片，小于32KB，新版本优先
+        shareObject.hdImageData = UIImageJPEGRepresentation(shareImages, 0.5);//此处图片按原图的0.5倍压缩(小程序新版本的预览图 128k ，此处图片如果太大可能会导致分享时弹出应用消息错误的弹框)//使用WXMiniProgramObject的hdImageData属性
     }
     //网页
     else
@@ -190,6 +195,24 @@ WX_EXPORT_METHOD(@selector(authLogin:))
         }
         
     }];
+}
+- (UIImage*)compressImage:(UIImage*)sourceImage toTargetWidth:(CGFloat)targetWidth {
+    //获取原图片的大小尺寸
+    CGSize imageSize = sourceImage.size;
+    CGFloat width = imageSize.width;
+    CGFloat height = imageSize.height;
+    //根据目标图片的宽度计算目标图片的高度
+    CGFloat targetHeight = (targetWidth / width) * height;
+    //开启图片上下文
+    UIGraphicsBeginImageContext(CGSizeMake(targetWidth, targetHeight));
+    //绘制图片
+    [sourceImage drawInRect:CGRectMake(0,0, targetWidth, targetHeight)];
+    //从上下文中获取绘制好的图片
+    UIImage*newImage = UIGraphicsGetImageFromCurrentImageContext();
+    //关闭图片上下文
+    UIGraphicsEndImageContext();
+    
+    return newImage;
 }
 
 @end
